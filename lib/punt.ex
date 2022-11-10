@@ -90,7 +90,7 @@ defmodule Punt do
     parse = fn input ->
       case Map.fetch(input, name) do
         {:ok, value} -> p.parse.(value)
-        :error -> {:error, :no_such_get}
+        :error -> {:error, %{code: :no_such_get, input: input, field: name}}
       end
     end
 
