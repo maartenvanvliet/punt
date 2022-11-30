@@ -46,7 +46,7 @@ defmodule Punt do
     case result do
       {:ok, result} ->
         if module do
-          {:ok, struct(module, result)}
+          {:ok, struct!(module, result)}
         else
           {:ok, Map.new(result)}
         end
