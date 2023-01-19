@@ -19,9 +19,9 @@ defmodule Punt.MixProject do
         files: ~w(LICENSE README.md lib mix.exs .formatter.exs)
       ],
       docs: [
-        main: "SqlParser",
+        main: "Punt",
         source_url: @url,
-        canonical: "http://hexdocs.pm/sql_parser"
+        canonical: "http://hexdocs.pm/punt"
       ]
     ]
   end
