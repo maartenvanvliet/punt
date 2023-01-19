@@ -355,4 +355,25 @@ defmodule Punt do
 
     build(parse: parse)
   end
+
+  def get_in(names, p) do
+    parse = fn input ->
+        deep_value = names
+        |> Enum.reduce(input, fn
+          name, {:error, _} ->
+            {:error, %{code: :no_such_get, input: input, field: name}}
+
+          name, input ->
+            case Map.fetch(input, name) do
+              {:ok, value} -> value
+              :error -> {:error, %{code: :no_such_get, input: input, field: name}}
+            end
+        end)
+
+        p.parse.(deep_value)
+    end
+
+
+    Punt.build(parse: parse)
+  end
 end

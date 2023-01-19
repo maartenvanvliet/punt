@@ -96,6 +96,11 @@ defmodule PuntTest do
       assert 123 == Punt.map(Punt.string(), &String.to_integer/1) |> Punt.parse(input)
     end
 
+    test "deep map" do
+      input = %{a: %{b: 3}}
+      assert {:ok, 3} == Punt.get_in([:a, :b], Punt.integer()) |> Punt.parse(input)
+    end
+
     test "map encoders" do
       map_encoders = fn {:ok, results} ->
         {:ok, List.to_tuple(results)}
