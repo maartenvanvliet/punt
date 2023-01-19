@@ -4,16 +4,6 @@ defmodule Punt do
   """
   defstruct [:parse, :gen]
 
-  defmacro defparse(name, combinator) do
-    quote do
-      def unquote(name)(input) do
-        # combinator |> dbg
-        # |> Macro.escape() |> IO.inspect()
-        unquote(combinator).parse.(input)
-      end
-    end
-  end
-
   def parse(punt, input) do
     punt.parse.(input)
   end
@@ -30,6 +20,13 @@ defmodule Punt do
     struct!(__MODULE__, opts)
   end
 
+  @doc """
+  Parse into a map or struct
+
+  ## Example
+      iex> Punt.new([a: Punt.get(:b, Punt.string)], %{b: "foo"})
+      {:ok, %{a: "foo"}}
+  """
   def new(map, input, module \\ nil) do
     result =
       Enum.reduce(map, {:ok, []}, fn
@@ -56,6 +53,13 @@ defmodule Punt do
     end
   end
 
+  @doc """
+  Parse into a map
+
+  ## Example
+      iex> Punt.of_map([a: Punt.get(:b, Punt.string)]) |> Punt.parse(%{b: "foo"})
+      {:ok, %{a: "foo"}}
+  """
   def of_map(map) do
     parse = fn input ->
       new(map, input)
@@ -71,6 +75,13 @@ defmodule Punt do
     build(parse: parse, gen: gen)
   end
 
+  @doc """
+  Parse into a struct
+
+  ## Example
+      iex> Punt.of_struct([a: Punt.get(:b, Punt.string)], A) |> Punt.parse(%{b: "foo"})
+      {:ok, %PuntTest.A{a: "foo"}}
+  """
   def of_struct(map, module) do
     parse = fn input ->
       new(map, input, module)
@@ -86,6 +97,17 @@ defmodule Punt do
     build(parse: parse, gen: gen)
   end
 
+  @doc """
+  Parse a map key
+
+  ## Example
+
+      iex> Punt.get(:name, Punt.string) |> Punt.parse(%{name: "foo"})
+      {:ok, "foo"}
+
+      iex> Punt.get(:name, Punt.string) |> Punt.parse(%{bar: "foo"})
+      {:error, %{code: :no_such_get, field: :name, input: %{bar: "foo"}}}
+  """
   def get(name, p) do
     parse = fn input ->
       case Map.fetch(input, name) do
@@ -101,10 +123,21 @@ defmodule Punt do
     build(parse: parse, gen: StreamData.fixed_map(map))
   end
 
+  @doc """
+  Parse a map, fallback to default
+
+  ## Example
+
+      iex> Punt.get_or_missing(:name, "default", Punt.string) |> Punt.parse(%{name: "foo"})
+      {:ok, "foo"}
+
+      iex> Punt.get_or_missing(:name, "default", Punt.string) |> Punt.parse(%{bar: "foo"})
+      {:ok, "default"}
+  """
   def get_or_missing(name, default, p) do
     parse = fn input ->
       case Map.fetch(input, name) do
-        {:ok, value} -> p.(value)
+        {:ok, value} -> p.parse.(value)
         :error -> {:ok, default}
       end
     end
@@ -112,6 +145,14 @@ defmodule Punt do
     build(parse: parse)
   end
 
+  @doc """
+  Parse a pair
+
+  ## Example
+
+      iex> Punt.singleton_of(Punt.string) |> Punt.parse(["foo"])
+      {:ok, "foo"}
+  """
   def singleton_of(p) do
     parse = fn
       [el] ->
@@ -130,6 +171,14 @@ defmodule Punt do
     build(parse: parse)
   end
 
+  @doc """
+  Parse a pair
+
+  ## Example
+
+      iex> Punt.pair_of(Punt.string, Punt.string) |> Punt.parse(["foo", "bar"])
+      {:ok, {"foo", "bar"}}
+  """
   def pair_of(p1, p2) do
     convert_pair = fn a, b ->
       case p1.parse.(a) do
@@ -161,6 +210,17 @@ defmodule Punt do
     build(parse: parse)
   end
 
+  @doc """
+  Parse a list
+
+  ## Example
+
+      iex> Punt.list_of(Punt.string) |> Punt.parse(["foo", "bar"])
+      {:ok, ["foo", "bar"]}
+
+      iex> Punt.list_of(Punt.string) |> Punt.parse(["foo", 1])
+      {:error, %{details: :not_a_string, failed_element: 1}}
+  """
   def list_of(p, opts \\ []) do
     parse = fn
       xs when is_list(xs) ->
@@ -189,16 +249,58 @@ defmodule Punt do
     build(parse: parse, gen: opts[:gen] || StreamData.list_of(p.gen))
   end
 
+  @doc """
+  Parse a string
+
+  ## Example
+
+      iex> Punt.string() |> Punt.parse("foo")
+      {:ok, "foo"}
+
+      iex> Punt.string() |> Punt.parse(3.4)
+      {:error, :not_a_string}
+
+      iex> Punt.string() |> Punt.parse(3)
+      {:error, :not_a_string}
+  """
   def string(opts \\ []) do
     parse = Punt.Parser.string()
     build(parse: parse, gen: opts[:gen] || StreamData.string(:printable))
   end
 
+  @doc """
+  Parse a integer
+
+  ## Example
+
+      iex> Punt.integer() |> Punt.parse(3)
+      {:ok, 3}
+
+      iex> Punt.integer() |> Punt.parse(3.4)
+      {:error, :not_an_integer}
+
+      iex> Punt.integer() |> Punt.parse("foo")
+      {:error, :not_an_integer}
+  """
   def integer(opts \\ []) do
     parse = Punt.Parser.integer()
     build(parse: parse, gen: opts[:gen] || StreamData.integer())
   end
 
+  @doc """
+  Parse a float
+
+  ## Example
+
+      iex> Punt.float() |> Punt.parse(3.4)
+      {:ok, 3.4}
+
+      iex> Punt.float() |> Punt.parse(3)
+      {:error, :not_a_float}
+
+      iex> Punt.float() |> Punt.parse("foo")
+      {:error, :not_a_float}
+  """
   def float() do
     parse = fn
       s when is_float(s) -> {:ok, s}
@@ -208,6 +310,20 @@ defmodule Punt do
     build(parse: parse)
   end
 
+  @doc """
+  Parse a number
+
+  ## Example
+
+      iex> Punt.number() |> Punt.parse(3.4)
+      {:ok, 3.4}
+
+      iex> Punt.number() |> Punt.parse(3)
+      {:ok, 3}
+
+      iex> Punt.number() |> Punt.parse("foo")
+      {:error, :not_a_number}
+  """
   def number() do
     parse = fn
       s when is_number(s) -> {:ok, s}
@@ -217,6 +333,20 @@ defmodule Punt do
     build(parse: parse)
   end
 
+  @doc """
+  Parse a boolean
+
+  ## Example
+
+      iex> Punt.boolean() |> Punt.parse(true)
+      {:ok, true}
+
+      iex> Punt.boolean() |> Punt.parse(false)
+      {:ok, false}
+
+      iex> Punt.boolean() |> Punt.parse("foo")
+      {:error, :not_a_boolean}
+  """
   def boolean() do
     parse = fn
       s when is_boolean(s) -> {:ok, s}
@@ -226,6 +356,17 @@ defmodule Punt do
     build(parse: parse)
   end
 
+  @doc """
+  Parse a nil
+
+  ## Example
+
+      iex> Punt.null() |> Punt.parse(nil)
+      {:ok, nil}
+
+      iex> Punt.null() |> Punt.parse("foo")
+      {:error, :not_a_null}
+  """
   def null() do
     parse = fn
       s when is_nil(s) -> {:ok, s}
@@ -235,6 +376,17 @@ defmodule Punt do
     build(parse: parse)
   end
 
+  @doc """
+  Parse a value at index
+
+  ## Example
+
+      iex> Punt.index(2, Punt.number) |> Punt.parse([1,2,3])
+      {:ok, 3}
+
+      iex> Punt.index(10, Punt.number) |> Punt.parse([1,2,3])
+      {:error, :not_a_number}
+  """
   def index(i, p) do
     parse = fn
       xs ->
@@ -272,6 +424,13 @@ defmodule Punt do
     build(parse: parse)
   end
 
+  @doc """
+  Apply parser and map over result
+
+  ## Example
+
+      iex> Punt.map(Punt.string(), &String.to_integer(&1)) |> Punt.parse("123")
+  """
   def map(p, map_fun, gen_fun \\ nil) do
     parse = fn input ->
       case p.parse.(input) do
@@ -283,6 +442,11 @@ defmodule Punt do
     build(parse: parse, gen: gen_fun)
   end
 
+  @doc """
+  Apply parser, and then decide what to do
+
+  Useful for conditional parsing based on result of previous parse
+  """
   def and_then(p, fun) do
     punt = build(parse: fun)
 
@@ -296,6 +460,9 @@ defmodule Punt do
     build(parse: parse)
   end
 
+  @doc """
+  Always failing parser
+  """
   def fail(reason) do
     parse = fn _ ->
       {:error, reason}
@@ -304,6 +471,9 @@ defmodule Punt do
     build(parse: parse)
   end
 
+  @doc """
+  Always succeeding parser
+  """
   def succeed(value) do
     parse = fn _ ->
       {:ok, value}
@@ -312,6 +482,14 @@ defmodule Punt do
     build(parse: parse, gen: StreamData.constant(value))
   end
 
+  @doc """
+  Returns value you put in
+
+  ## Example
+
+      iex> Punt.value() |> Punt.parse("123")
+      {:ok, "123"}
+  """
   def value() do
     parse = fn input ->
       {:ok, input}
@@ -320,6 +498,17 @@ defmodule Punt do
     build(parse: parse, gen: StreamData.term())
   end
 
+  @doc """
+  Chooses one of the given parser
+
+  ## Example
+
+      iex> Punt.one_of([Punt.null(), Punt.integer()]) |> Punt.parse(123)
+      {:ok, 123}
+
+      iex> Punt.one_of([Punt.null(), Punt.integer()]) |> Punt.parse(nil)
+      {:ok, nil}
+  """
   def one_of(decoders) do
     parse = fn input ->
       Enum.reduce(decoders, {:error, []}, fn
@@ -344,6 +533,17 @@ defmodule Punt do
     build(parse: parse, gen: decoders |> Enum.map(& &1.gen) |> StreamData.one_of())
   end
 
+  @doc """
+  Check whether a value holds for the input
+
+  ## Example
+
+      iex> Punt.predicate(& &1 == 123) |> Punt.parse(123)
+      {:ok, 123}
+
+      iex> Punt.predicate(& &1 != 123) |> Punt.parse(123)
+      {:error, %{context: [], input: 123, reason: :predicate_failed}}
+  """
   def predicate(fun, context \\ []) do
     parse = fn input ->
       if fun.(input) == true do
@@ -356,6 +556,15 @@ defmodule Punt do
     build(parse: parse)
   end
 
+
+  @doc """
+  Gets a nested value from nested maps
+
+  ## Example
+
+      iex> Punt.get_in([:a, :b], Punt.number()) |> Punt.parse(%{a: %{b: 123}})
+      {:ok, 123}
+  """
   def get_in(names, p) do
     parse = fn input ->
         deep_value = names

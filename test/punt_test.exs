@@ -1,5 +1,7 @@
 defmodule PuntTest do
   use ExUnit.Case
+  defmodule A, do: defstruct([:a])
+  doctest Punt
 
   describe "parsing" do
     test "get" do
