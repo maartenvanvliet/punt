@@ -556,7 +556,6 @@ defmodule Punt do
     build(parse: parse)
   end
 
-
   @doc """
   Gets a nested value from nested maps
 
@@ -564,10 +563,17 @@ defmodule Punt do
 
       iex> Punt.get_in([:a, :b], Punt.number()) |> Punt.parse(%{a: %{b: 123}})
       {:ok, 123}
+
+      iex> Punt.get_in([:a, :b], Punt.one_of([Punt.null(), Punt.integer()])) |> Punt.parse(%{a: %{b: nil}})
+      {:ok, nil}
+
+      iex> Punt.get_in([:a, :b], Punt.one_of([Punt.null(), Punt.integer()])) |> Punt.parse(%{a: %{b: 123}})
+      {:ok, 123}
   """
   def get_in(names, p) do
     parse = fn input ->
-        deep_value = names
+      deep_value =
+        names
         |> Enum.reduce(input, fn
           name, {:error, _} ->
             {:error, %{code: :no_such_get, input: input, field: name}}
@@ -579,9 +585,8 @@ defmodule Punt do
             end
         end)
 
-        p.parse.(deep_value)
+      p.parse.(deep_value)
     end
-
 
     Punt.build(parse: parse)
   end
